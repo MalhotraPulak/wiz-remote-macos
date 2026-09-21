@@ -7,6 +7,10 @@ struct AudioFeatures: Sendable {
     let bass: Float
     let midrange: Float
     let treble: Float
+    let onsetStrength: Float
+    let lowOnset: Float
+    let midOnset: Float
+    let highOnset: Float
     let isBeat: Bool
     let capturedAt: Date
 
@@ -15,6 +19,10 @@ struct AudioFeatures: Sendable {
         bass: 0,
         midrange: 0,
         treble: 0,
+        onsetStrength: 0,
+        lowOnset: 0,
+        midOnset: 0,
+        highOnset: 0,
         isBeat: false,
         capturedAt: .distantPast
     )
@@ -295,6 +303,9 @@ final class AudioFeatureAnalyzer {
     private var imaginaryOutput: [Float]
     private var previousMagnitudes: [Float]
     private var averageFlux: Float = 0
+    private var averageLowFlux: Float = 0
+    private var averageMidFlux: Float = 0
+    private var averageHighFlux: Float = 0
     private var lastBeatDate = Date.distantPast
     private var smoothedLevel: Float = 0
     private var smoothedBass: Float = 0
@@ -376,17 +387,41 @@ final class AudioFeatureAnalyzer {
         let midrange = bandLevel(magnitudes, lowerHz: 180, upperHz: 2_000)
         let treble = bandLevel(magnitudes, lowerHz: 2_000, upperHz: 12_000)
 
-        var flux: Float = 0
-        for index in 1..<binCount {
-            flux += max(0, sqrt(magnitudes[index]) - sqrt(previousMagnitudes[index]))
-        }
+        let flux = spectralFlux(
+            magnitudes,
+            previous: previousMagnitudes,
+            lowerHz: 30,
+            upperHz: min(16_000, sampleRate / 2)
+        )
+        let lowFlux = spectralFlux(
+            magnitudes,
+            previous: previousMagnitudes,
+            lowerHz: 40,
+            upperHz: 180
+        )
+        let midFlux = spectralFlux(
+            magnitudes,
+            previous: previousMagnitudes,
+            lowerHz: 180,
+            upperHz: 2_000
+        )
+        let highFlux = spectralFlux(
+            magnitudes,
+            previous: previousMagnitudes,
+            lowerHz: 2_000,
+            upperHz: 12_000
+        )
+
+        let onsetStrength = normalizedOnset(flux, average: &averageFlux)
+        let lowOnset = normalizedOnset(lowFlux, average: &averageLowFlux)
+        let midOnset = normalizedOnset(midFlux, average: &averageMidFlux)
+        let highOnset = normalizedOnset(highFlux, average: &averageHighFlux)
         previousMagnitudes = magnitudes
-        averageFlux = averageFlux == 0 ? flux : averageFlux * 0.92 + flux * 0.08
 
         let now = Date()
         let beat = level > 0.08
-            && flux > max(averageFlux * 1.55, 0.000_1)
-            && now.timeIntervalSince(lastBeatDate) > 0.16
+            && max(lowOnset * 1.15, onsetStrength, midOnset * 0.82) > 0.34
+            && now.timeIntervalSince(lastBeatDate) > 0.19
         if beat {
             lastBeatDate = now
         }
@@ -402,6 +437,10 @@ final class AudioFeatureAnalyzer {
                 bass: smoothedBass,
                 midrange: smoothedMidrange,
                 treble: smoothedTreble,
+                onsetStrength: onsetStrength,
+                lowOnset: lowOnset,
+                midOnset: midOnset,
+                highOnset: highOnset,
                 isBeat: beat,
                 capturedAt: now
             )
@@ -428,6 +467,36 @@ final class AudioFeatureAnalyzer {
             10 * log10(max(normalizedPower, 0.000_000_000_1)),
             floor: -70
         )
+    }
+
+    private func spectralFlux(
+        _ magnitudes: [Float],
+        previous: [Float],
+        lowerHz: Double,
+        upperHz: Double
+    ) -> Float {
+        let frequencyPerBin = sampleRate / Double(frameSize)
+        let lowerBin = max(1, Int(lowerHz / frequencyPerBin))
+        let upperBin = min(magnitudes.count - 1, Int(upperHz / frequencyPerBin))
+        guard upperBin >= lowerBin else { return 0 }
+
+        var flux: Float = 0
+        for index in lowerBin...upperBin {
+            flux += max(0, sqrt(magnitudes[index]) - sqrt(previous[index]))
+        }
+        return flux / Float(upperBin - lowerBin + 1)
+    }
+
+    private func normalizedOnset(_ flux: Float, average: inout Float) -> Float {
+        guard average > 0 else {
+            average = max(flux, 0.000_001)
+            return 0
+        }
+
+        let ratio = flux / max(average, 0.000_001)
+        let score = min(1, max(0, (ratio - 1.12) / 1.9))
+        average = average * 0.94 + flux * 0.06
+        return score
     }
 
     private func normalizedDecibels(_ decibels: Float, floor: Float) -> Float {

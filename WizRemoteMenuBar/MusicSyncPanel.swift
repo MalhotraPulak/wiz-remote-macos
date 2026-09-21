@@ -18,6 +18,7 @@ struct MusicSyncPanel: View {
                     .controlSize(.small)
                     .font(.system(size: 11, weight: .medium))
                     .disabled(controller.isRunning)
+                partyControls
                 rateSelection
                 meters
                 controls
@@ -45,7 +46,7 @@ struct MusicSyncPanel: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Music Sync Lab")
                         .font(.system(size: 13, weight: .semibold))
-                    Text(controller.isRunning ? "System audio is live" : "Phase 1 audio and UDP test")
+                    Text(controller.isRunning ? syncSummary : "Beat-aware two-light party mode")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -119,6 +120,41 @@ struct MusicSyncPanel: View {
         }
     }
 
+    private var partyControls: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Palette")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Picker("Palette", selection: $controller.partyPalette) {
+                    ForEach(PartyPalette.allCases) { palette in
+                        Text(palette.rawValue).tag(palette)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 105)
+            }
+
+            HStack(spacing: 8) {
+                Text("Intensity")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 48, alignment: .leading)
+
+                Slider(value: $controller.partyIntensity, in: 0.25...1)
+
+                Text("\(Int(controller.partyIntensity * 100))%")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, alignment: .trailing)
+            }
+        }
+    }
+
     private var meters: some View {
         VStack(spacing: 6) {
             MeterRow(label: "LEVEL", value: controller.level, color: .white)
@@ -134,7 +170,7 @@ struct MusicSyncPanel: View {
                 controller.toggle()
             } label: {
                 Label(
-                    controller.isRunning ? "Stop and Restore" : "Start System Audio Test",
+                    controller.isRunning ? "Stop and Restore" : "Start Music Sync",
                     systemImage: controller.isRunning ? "stop.fill" : "play.fill"
                 )
                 .font(.system(size: 11, weight: .semibold))
@@ -148,6 +184,13 @@ struct MusicSyncPanel: View {
                     && controller.selectedBulbIDs.isEmpty
             )
         }
+    }
+
+    private var syncSummary: String {
+        if let bpm = controller.estimatedBPM {
+            return "\(controller.partySection.rawValue) • \(Int(bpm.rounded())) BPM • \(Int(controller.beatConfidence * 100))% lock"
+        }
+        return "\(controller.partySection.rawValue) • finding the beat"
     }
 }
 

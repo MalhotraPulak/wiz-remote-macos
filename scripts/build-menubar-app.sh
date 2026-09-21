@@ -44,6 +44,7 @@ swiftc \
     "$PROJECT_DIR/WizRemoteMenuBar/LaunchAtLoginController.swift" \
     "$PROJECT_DIR/WizRemoteMenuBar/SystemAudioCapture.swift" \
     "$PROJECT_DIR/WizRemoteMenuBar/WizRealtimeSender.swift" \
+    "$PROJECT_DIR/WizRemoteMenuBar/PartyLightEngine.swift" \
     "$PROJECT_DIR/WizRemoteMenuBar/MusicSyncController.swift" \
     "$PROJECT_DIR/WizRemoteMenuBar/MusicSyncPanel.swift" \
     "$PROJECT_DIR/WizRemoteMenuBar/MenuBarContentView.swift" \

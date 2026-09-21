@@ -50,6 +50,20 @@ final class WizRealtimeSender {
     }
 
     func send(_ frame: WizMusicFrame, to bulbs: [WizBulb]) -> WizStreamSendResult {
+        send(to: bulbs) { _ in frame }
+    }
+
+    func send(
+        _ framesByBulbID: [String: WizMusicFrame],
+        to bulbs: [WizBulb]
+    ) -> WizStreamSendResult {
+        send(to: bulbs) { framesByBulbID[$0.id] }
+    }
+
+    private func send(
+        to bulbs: [WizBulb],
+        frameForBulb: (WizBulb) -> WizMusicFrame?
+    ) -> WizStreamSendResult {
         guard socketDescriptor >= 0 else {
             return WizStreamSendResult(
                 packetsSent: 0,
@@ -63,6 +77,7 @@ final class WizRealtimeSender {
         let acknowledgements = drainAcknowledgements()
 
         for bulb in bulbs where bulb.isLightingDevice {
+            guard let frame = frameForBulb(bulb) else { continue }
             var parameters: [String: Any] = [
                 "state": true,
                 "dimming": min(100, max(10, frame.brightness))

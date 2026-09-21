@@ -16,11 +16,17 @@ final class MusicSyncController: ObservableObject {
     @Published private(set) var packetsSent = 0
     @Published private(set) var packetErrors = 0
     @Published private(set) var acknowledgements = 0
+    @Published private(set) var estimatedBPM: Double?
+    @Published private(set) var beatConfidence: Float = 0
+    @Published private(set) var partySection = PartySection.listening
     @Published var updateRate = 10
     @Published var sendsToLights = false
+    @Published var partyPalette = PartyPalette.neon
+    @Published var partyIntensity = 0.85
 
     private let audioCapture = SystemAudioCapture()
     private let sender = WizRealtimeSender()
+    private let partyEngine = PartyLightEngine()
     private var sendTimer: Timer?
     private var latestFeatures = AudioFeatures.silence
     private var availableBulbs: [WizBulb] = []
@@ -101,6 +107,8 @@ final class MusicSyncController: ObservableObject {
         savedBulbStates = targets
         latestFeatures = .silence
         resetMetrics()
+        partyEngine.palette = partyPalette
+        partyEngine.intensity = Float(partyIntensity)
 
         do {
             try audioCapture.start { [weak self] features in
@@ -133,8 +141,12 @@ final class MusicSyncController: ObservableObject {
         _ = sender.restore(savedBulbStates)
         savedBulbStates = []
         latestFeatures = .silence
+        partyEngine.reset()
         isRunning = false
         isBeat = false
+        estimatedBPM = nil
+        beatConfidence = 0
+        partySection = .listening
         statusMessage = message ?? (controlledLights
             ? "Stopped and restored the selected lights."
             : "System-audio capture stopped.")
@@ -155,11 +167,15 @@ final class MusicSyncController: ObservableObject {
 
     private func receive(_ features: AudioFeatures) {
         latestFeatures = features
+        partyEngine.observe(features)
         level = features.level
         bass = features.bass
         midrange = features.midrange
         treble = features.treble
         isBeat = features.isBeat
+        estimatedBPM = partyEngine.currentBPM
+        beatConfidence = partyEngine.beatConfidence
+        partySection = partyEngine.currentSection
         if isRunning, !sendsToLights {
             statusMessage = "Audio is live. Enable light output after checking the meters."
         }
@@ -175,24 +191,30 @@ final class MusicSyncController: ObservableObject {
         let targets = savedBulbStates
         guard !targets.isEmpty else { return }
 
-        let peak = max(latestFeatures.bass, latestFeatures.midrange, latestFeatures.treble, 0.05)
-        let red = Int(255 * min(1, latestFeatures.bass / peak))
-        let green = Int(255 * min(1, latestFeatures.midrange / peak))
-        let blue = Int(255 * min(1, latestFeatures.treble / peak))
-        var brightness = 10 + Int(90 * latestFeatures.level)
-        if latestFeatures.isBeat {
-            brightness = max(brightness, 85)
+        partyEngine.palette = partyPalette
+        partyEngine.intensity = Float(partyIntensity)
+        let partyOutput = partyEngine.render(
+            lightCount: targets.count,
+            at: latestFeatures.capturedAt
+        )
+        var framesByBulbID: [String: WizMusicFrame] = [:]
+        for (bulb, frame) in zip(targets, partyOutput.frames) {
+            framesByBulbID[bulb.id] = WizMusicFrame(
+                red: frame.color.red,
+                green: frame.color.green,
+                blue: frame.color.blue,
+                brightness: frame.brightness
+            )
         }
 
         let result = sender.send(
-            WizMusicFrame(
-                red: red,
-                green: green,
-                blue: blue,
-                brightness: brightness
-            ),
+            framesByBulbID,
             to: targets
         )
+        estimatedBPM = partyOutput.bpm
+        beatConfidence = partyOutput.beatConfidence
+        partySection = partyOutput.section
+        isBeat = partyOutput.triggeredBeat
         framesSent += 1
         packetsSent += result.packetsSent
         packetErrors += result.packetErrors
@@ -210,5 +232,9 @@ final class MusicSyncController: ObservableObject {
         midrange = 0
         treble = 0
         isBeat = false
+        estimatedBPM = nil
+        beatConfidence = 0
+        partySection = .listening
+        partyEngine.reset()
     }
 }

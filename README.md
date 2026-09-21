@@ -39,18 +39,25 @@ the full app from the macOS menu bar. It registers itself with the native macOS
 Login Items service on first launch; the **Launch at Login** switch in the menu
 can disable or re-enable that behavior.
 
-### Phase 1 music-sync lab
+### Beat-aware music sync
 
 On macOS 14.2 or newer, expand **Music Sync Lab** in the menu-bar app to test
 direct system-audio analysis. The app uses a private Core Audio process tap;
 audio is analyzed in memory and is never recorded, saved, or sent over the
 network.
 
+The party renderer detects low-, mid-, and high-frequency transients, learns the
+beat period, adapts to the track's loudness, and coordinates selected lights
+instead of mapping spectrum levels directly to RGB. Colours stay within a chosen
+palette, regular beats alternate between lights, and downbeats illuminate the
+group together. The menu reports its estimated BPM, beat-lock confidence, and
+current section mode.
+
 1. Leave **Send UDP colours to selected lights** off and start capture.
 2. Approve **System Audio Recording** when macOS asks, then play audio and check
    the level, bass, mids, high, and beat indicators.
-3. Stop capture, select the desired lights, enable UDP colour output, choose
-   5, 10, 15, or 20 Hz, and start the test again.
+3. Stop capture, select the desired lights, choose a palette and intensity,
+   enable UDP colour output, select an update rate, and start music sync again.
 4. Use **Stop and Restore** when finished. The selected lights' previous power,
    brightness, colour/temperature, or scene state is restored on stop, sleep,
    and normal app termination.
