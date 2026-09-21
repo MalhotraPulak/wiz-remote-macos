@@ -1,0 +1,2 @@
+// Intentionally empty. Used only to mask a duplicated SwiftBridging module map
+// found in some mixed-version Command Line Tools installations.

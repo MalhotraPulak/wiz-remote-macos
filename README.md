@@ -1,20 +1,94 @@
-**Wiz Remote App**
+# WiZ Remote App
 
-Wiz Remote App is my first SwiftUI application that lets you easily control a Wiz smart bulb straight from your Mac. It works by scanning through your local network to find the bulb’s IP address using UDP and sends commands directly to control the bulb.
+WiZ Remote is a small native macOS app for finding and controlling WiZ smart
+lights on the same local network. It communicates directly with the lights over
+UDP; no WiZ cloud account is required.
 
-When you turn the bulb on, it automatically sets to a warm white color that creates a cozy atmosphere.
+This repository now includes a reproducible Swift Package Manager build. The
+original source-only repository did not contain an Xcode project or package
+manifest and scanned the LAN by launching 253 shell processes at once. Discovery
+now uses one native UDP broadcast socket instead.
 
-**How It Works**
+## Requirements
 
-The app scans your Wi-Fi network to locate your bulb’s IP address by sending UDP packets. Once it finds the bulb, it communicates directly over the local network to control power and lighting.
+- macOS 13 or newer
+- Apple Command Line Tools or Xcode with Swift 6
+- A Mac and WiZ lights connected to the same non-guest LAN
 
-**Features**
+## Build the app
 
-	•	Designed specifically for Wiz bulbs on Mac.
-	•	No reliance on cloud services — everything stays local.
-	•	Fast and responsive control.
-	•	Made to fill the gap for Mac users who want simple, reliable bulb control.
+```bash
+./scripts/build-app.sh
+```
 
-Just a heads up, if the app doesn’t open right away, you might need to go to the settings, security, and allow apps from trusted developers. Also, the app needs your permission to scan the local network when you first open it.
+The signed local build is created at:
 
- [Wiz Remote App](https://github.com/user-attachments/files/20357546/Wiz.Remote.App.app.zip)
+```text
+dist/WiZ Remote.app
+```
+
+To build the separate menu-bar companion:
+
+```bash
+./scripts/build-menubar-app.sh
+```
+
+It creates `dist/WiZ Remote Menu Bar.app`. This edition has no Dock icon and
+provides compact per-device power switches, discovery status, and a shortcut to
+the full app from the macOS menu bar. It registers itself with the native macOS
+Login Items service on first launch; the **Launch at Login** switch in the menu
+can disable or re-enable that behavior.
+
+### Phase 1 music-sync lab
+
+On macOS 14.2 or newer, expand **Music Sync Lab** in the menu-bar app to test
+direct system-audio analysis. The app uses a private Core Audio process tap;
+audio is analyzed in memory and is never recorded, saved, or sent over the
+network.
+
+1. Leave **Send UDP colours to selected lights** off and start capture.
+2. Approve **System Audio Recording** when macOS asks, then play audio and check
+   the level, bass, mids, high, and beat indicators.
+3. Stop capture, select the desired lights, enable UDP colour output, choose
+   5, 10, 15, or 20 Hz, and start the test again.
+4. Use **Stop and Restore** when finished. The selected lights' previous power,
+   brightness, colour/temperature, or scene state is restored on stop, sleep,
+   and normal app termination.
+
+Sockets are excluded by requiring lighting metadata from the WiZ device. Live
+frames use a persistent non-blocking UDP socket and are never retried, so an old
+animation frame cannot queue behind a newer one.
+
+The repository also contains a `Package.swift` manifest for opening the source as
+a Swift package in Xcode. The build script uses `swiftc` directly, so it works
+with Apple's Command Line Tools and does not require a generated Xcode project.
+
+## Use it
+
+1. Open `dist/WiZ Remote.app`.
+2. Allow **Local Network** access when macOS asks.
+3. Keep the Mac and lights on the same LAN. The Mac can use 5 GHz while the
+   lights use 2.4 GHz; both bands only need to route to each other.
+4. The app searches automatically; use **Scan again** to retry.
+5. Identify each light by its module, IP, MAC, firmware, room ID, and live-state
+   metadata, then use the power button on that light's card.
+
+If discovery fails, turn off any VPN temporarily and confirm the router does not
+isolate its 2.4 GHz and 5 GHz bands or Wi-Fi clients (often enabled on guest
+networks). macOS permissions can be
+reviewed in **System Settings → Privacy & Security → Local Network**.
+
+If a light reports its state but ignores control commands, check **Settings →
+Security → Local communication** in the WiZ app. WiZ can reject unverified
+third-party UDP commands when **Only verified controls** is selected. This app
+does not currently import or store the WiZ home security key.
+
+## Current scope
+
+The app discovers and controls multiple lights and shows the metadata available
+from WiZ's local UDP API. Brightness, color temperature, RGB color, and scene
+controls are not implemented yet.
+
+## Credits
+
+Original app by [Aditya Bhadang](https://github.com/AdityaBhadang/WizRemoteApp).
